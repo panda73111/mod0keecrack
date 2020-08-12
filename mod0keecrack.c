@@ -49,6 +49,7 @@
 
 static void usage(char* prog);
 static char* kdbx_filename;
+static checkpoint_t cracking_checkpoint;
 
 size_t kdbx_headerentries_free(m0_kdbx_header_entry_t* e)
 {
@@ -207,26 +208,24 @@ void kdbx_payload_dump(m0_kdbx_payload_t p)
 	return;
 }
 
-void nextCharacter(char* s, int index, size_t stringLength)
+void nextCharacter(char* s, int index)
 {
-	if (s[index] == 0)
-		s[index] = ' ';
-	else if (s[index] == '~')
+	if (s[index] == '~')
 	{
-		if (index == stringLength - 1)
+		if (index == strlen(s) - 1)
 		{
 			s[0] = 0;
 			return;
 		}
 		s[index] = ' ';
-		nextCharacter(s, index + 1, stringLength);
+		nextCharacter(s, index + 1);
 		return;
 	}
 	else
 		s[index]++;
 }
 
-bool kdbx_payload_crack(m0_kdbx_database_t* db, size_t max_password_length, char* password)
+bool kdbx_payload_crack(m0_kdbx_database_t* db)
 {
 	bool res = false;
 	FILE* keyfd = NULL;
@@ -276,19 +275,13 @@ bool kdbx_payload_crack(m0_kdbx_database_t* db, size_t max_password_length, char
 
 	printf("[*] kdbx crack:\n");
 
-	if (password == NULL)
-	{
-		fclose(keyfd);
-		return false;
-	}
-
-	while (password[0] != 0) {
-		nextCharacter(password, 0, max_password_length);
-		res = kdbx_decrypt_payload(db, password, key_hash);
+	while (cracking_checkpoint.current_password[0] != 0) {
+		nextCharacter(cracking_checkpoint.current_password, 0);
+		res = kdbx_decrypt_payload(db, cracking_checkpoint.current_password, key_hash);
 		if (res) {
-			printf("[*] decryption successful with password %s\n", password);
+			printf("[*] decryption successful with password %s\n", cracking_checkpoint.current_password);
 			passwordfd = fopen("password.txt", "w+");
-			fwrite(password, sizeof(char), strlen(password), passwordfd);
+			fwrite(cracking_checkpoint.current_password, sizeof(char), strlen(cracking_checkpoint.current_password), passwordfd);
 			fclose(passwordfd);
 			return true;
 		}
@@ -356,7 +349,7 @@ bool kdbx_decrypt_payload(m0_kdbx_database_t* db, char* pass, uint8_t* key_hash)
 	return res;
 }
 
-void exitHandler(int signal)
+void exitHandler()
 {
 	exit(EXIT_SUCCESS);
 }
@@ -366,8 +359,6 @@ int main(int ac, char** av)
 	FILE* kdbx_fd = NULL;
 	char* kdbx_path = NULL;
 	char* tmp = NULL;
-	char* password = NULL;
-	size_t max_password_length = 2;
 	size_t filename_len = 1;
 
 	m0_kdbx_database_t kdbx_db = { 0 };
@@ -378,27 +369,19 @@ int main(int ac, char** av)
 
 	if (ac < 2)
 		usage(av[0]);
-	else if (ac > 2)
-		max_password_length = max(atoi(av[2]), 2);
-	password = (char*)malloc(max_password_length + 1);
-	if (password == NULL)
-	{
-		printf("[!] malloc(password) failed.");
-		exit(EXIT_FAILURE);
-	}
-	memset(password, 0, max_password_length);
-	password[0] = ' ';
-	password[max_password_length] = 0;
-	if (ac > 3)
-	{
-		memcpy(password, av[3], strlen(av[3]));
-	}
+	strcpy(cracking_checkpoint.starting_password, av[3], strlen(av[3]));
+	strcpy(cracking_checkpoint.current_password, cracking_checkpoint.starting_password);
 
 	memset(&kdbx_db, 0, sizeof(kdbx_db));
 
 	kdbx_path = av[1];
 	filename_len = strlen(kdbx_path);
 	kdbx_filename = (char*)malloc(filename_len + 5);
+	if (kdbx_filename == NULL)
+	{
+		printf("[!] kdbx_filename = malloc(%d) failed.", filename_len + 5);
+		exit(EXIT_FAILURE);
+	}
 	memset(kdbx_filename, 0, filename_len + 5);
 
 	if (filename_len > filename_len + 5)
@@ -429,7 +412,7 @@ int main(int ac, char** av)
 	kdbx_payload_read(kdbx_fd, &kdbx_db.payload);
 	kdbx_payload_dump(kdbx_db.payload);
 
-	kdbx_payload_crack(&kdbx_db, max_password_length, password);
+	kdbx_payload_crack(&kdbx_db, cracking_checkpoint.current_password);
 
 	kdbx_headerentries_free(&kdbx_db.kdbxheader);
 	fclose(kdbx_fd);
