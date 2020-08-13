@@ -331,6 +331,12 @@ bool kdbx_decrypt_payload(m0_kdbx_database_t* db, char* pass, uint8_t* key_hash)
 	masterkey_input_len = sizeof(transform_key) + hdr[MASTERSEED].len;
 	masterkey_input = (uint8_t*)malloc(masterkey_input_len);
 
+	if (masterkey_input == NULL)
+	{
+		printf("[!] masterkey_input = malloc(%d) failed.", masterkey_input_len);
+		exit(EXIT_FAILURE);
+	}
+
 	if (masterkey_input_len < hdr[MASTERSEED].len) {
 		// should never happen, as masterkey len is (currently) 16 bit
 		puts("[!] masterkey_input len integer overflow.");
@@ -349,8 +355,227 @@ bool kdbx_decrypt_payload(m0_kdbx_database_t* db, char* pass, uint8_t* key_hash)
 	return res;
 }
 
+void save_checkpoint()
+{
+	FILE* checkpoint_fd, * temp_fd;
+	fopen_s(&temp_fd, "temp_checkpoints.dat", "w");
+	if (!temp_fd) {
+		printf("[!] Can't open temporary checkpoints file %s\n", "temp_checkpoints.dat");
+		exit(EXIT_FAILURE);
+	}
+
+	fopen_s(&checkpoint_fd, "checkpoints.dat", "r");
+	if (!checkpoint_fd) {
+		printf("[!] Can't open checkpoints file %s\n", "checkpoints.dat");
+		uint8_t checkpoint_count = 1;
+		if (fwrite(&checkpoint_count, 1, 1, temp_fd) != 1)
+		{
+			printf("[!] error writing temporary checkpoints file %s\n", "temp_checkpoints.dat");
+			fclose(temp_fd);
+			remove("temp_checkpoints.dat");
+			return;
+		}
+		else
+		{
+			if (fwrite(cracking_checkpoint.starting_password, sizeof(char), 255, temp_fd) != 255)
+			{
+				printf("[!] error writing temporary checkpoints file %s\n", "temp_checkpoints.dat");
+				fclose(temp_fd);
+				remove("temp_checkpoints.dat");
+			}
+			if (fwrite(cracking_checkpoint.current_password, sizeof(char), 255, temp_fd) != 255)
+			{
+				printf("[!] error writing temporary checkpoints file %s\n", "temp_checkpoints.dat");
+				fclose(temp_fd);
+				remove("temp_checkpoints.dat");
+			}
+			remove("checkpoints.dat");
+			fclose(temp_fd);
+			if (rename("temp_checkpoints.dat ", "checkpoints.dat") != 0)
+			{
+				printf("[!] error renaming temporary checkpoints file %s to %s\n", "temp_checkpoints.dat", "checkpoints.dat");
+				return;
+			}
+			return;
+		}
+	}
+	uint8_t checkpoint_count = 1;
+	if (fread_s(&checkpoint_count, 1, 1, 1, checkpoint_fd) != 1)
+	{
+		printf("[!] error reading checkpoints file %s\n", "checkpoints.dat");
+		fclose(checkpoint_fd);
+		fclose(temp_fd);
+		return;
+	}
+	size_t checkpoint_size = sizeof(checkpoint_t);
+	char buffer[255];
+	if (fread_s(&buffer, sizeof(char) * 255, sizeof(char), 255, checkpoint_fd) != 255)
+	{
+		printf("[!] error reading checkpoints file %s\n", "checkpoints.dat");
+		fclose(checkpoint_fd);
+		if (fwrite(buffer, sizeof(char), 255, temp_fd) != 255)
+		{
+			printf("[!] error writing temporary checkpoints file %s\n", "temp_checkpoints.dat");
+			fclose(temp_fd);
+			remove("temp_checkpoints.dat");
+			return;
+		}
+		if (fread_s(&buffer, sizeof(char) * 255, sizeof(char), 255, checkpoint_fd) != 255)
+		{
+			printf("[!] error reading checkpoints file %s\n", "checkpoints.dat");
+		}
+		else {
+			if (fwrite(buffer, sizeof(char), 255, temp_fd) != 255)
+			{
+				printf("[!] error writing temporary checkpoints file %s\n", "temp_checkpoints.dat");
+				fclose(checkpoint_fd);
+				fclose(temp_fd);
+				remove("temp_checkpoints.dat");
+				return;
+			}
+		}
+		if (fwrite(cracking_checkpoint.current_password, sizeof(char), 255, temp_fd) != 255)
+		{
+			printf("[!] error writing temporary checkpoints file %s\n", "temp_checkpoints.dat");
+			fclose(temp_fd);
+			remove("temp_checkpoints.dat");
+			return;
+		}
+
+		fclose(temp_fd);
+		remove("checkpoints.dat");
+		if (rename("temp_checkpoints.dat ", "checkpoints.dat") != 0)
+		{
+			printf("[!] error renaming temporary checkpoints file %s to %s\n", "temp_checkpoints.dat", "checkpoints.dat");
+			fclose(checkpoint_fd);
+			fclose(temp_fd);
+			return;
+		}
+	}
+
+	bool new_checkpoint = true;
+	char starting_password[255];
+	if (fread_s(starting_password, sizeof(char) * 255, sizeof(char), 255, checkpoint_fd) != 255)
+	{
+		printf("[!] error reading checkpoints file %s\n", "checkpoints.dat");
+		fclose(checkpoint_fd);
+	}
+	starting_password[254] = '\0';
+	if (strcmp(cracking_checkpoint.starting_password, starting_password) == 0)
+	{
+		if (fwrite(cracking_checkpoint.current_password, sizeof(char), 255, temp_fd) != 255)
+		{
+			printf("[!] error writing temporary checkpoints file %s\n", "temp_checkpoints.dat");
+			fclose(temp_fd);
+			remove("temp_checkpoints.dat");
+			return;
+		}
+		new_checkpoint = false;
+
+	}
+	else
+	{
+		if (fread_s(buffer, sizeof(char) * 255, sizeof(char), 255, checkpoint_fd) != 255)
+		{
+			printf("[!] error reading checkpoints file %s\n", "checkpoints.dat");
+			fclose(checkpoint_fd);
+			fclose(temp_fd);
+		}
+		if (fwrite(buffer, sizeof(char), 255, temp_fd) != 255)
+		{
+			printf("[!] error writing temporary checkpoints file %s\n", "temp_checkpoints.dat");
+			fclose(checkpoint_fd);
+			fclose(temp_fd);
+			remove("temp_checkpoints.dat");
+			return;
+		}
+
+	}
+	if (new_checkpoint)
+		checkpoint_count++;
+	if (fwrite(&checkpoint_count, 1, 1, temp_fd) != 1)
+	{
+		printf("[!] error writing temporary checkpoints file %s\n", "temp_checkpoints.dat");
+		fclose(checkpoint_fd);
+		fclose(temp_fd);
+		remove("temp_checkpoints.dat");
+		return;
+	}
+
+	if (new_checkpoint)
+	{
+		if (fwrite(cracking_checkpoint.starting_password, sizeof(char), 255, temp_fd) != 255)
+		{
+			printf("[!] error writing temporary checkpoints file %s\n", "temp_checkpoints.dat");
+			fclose(checkpoint_fd);
+			fclose(temp_fd);
+			return;
+		}
+		if (fwrite(cracking_checkpoint.current_password, sizeof(char), 255, temp_fd) != 255)
+		{
+			printf("[!] error writing temporary checkpoints file %s\n", "temp_checkpoints.dat");
+			fclose(checkpoint_fd);
+			fclose(temp_fd);
+			return;
+		}
+	}
+	fclose(checkpoint_fd);
+	fclose(temp_fd);
+	if (remove("checkpoints.dat") != 0)
+	{
+		printf("[!] error removing checkpoints file %s\n%s", "checkpoints.dat", strerror(errno));
+		return;
+	}
+	if (rename("temp_checkpoints.dat ", "checkpoints.dat") != 0)
+	{
+		printf("[!] error renaming temporary checkpoints file %s to %s\n%s", "temp_checkpoints.dat", "checkpoints.dat", strerror(errno));
+		return;
+	}
+}
+
+void load_checkpoint()
+{
+	FILE* checkpoint_fd;
+	fopen_s(&checkpoint_fd, "checkpoints.dat", "r");
+	if (!checkpoint_fd) {
+		printf("[!] Can't open checkpoints file %s\n", "checkpoints.dat");
+		exit(EXIT_FAILURE);
+	}
+	uint8_t checkpoint_count;
+	if (fread_s(&checkpoint_count, 1, 1, 1, checkpoint_fd) != 1)
+	{
+		printf("[!] error reading checkpoints file %s\n", "checkpoints.dat");
+		fclose(checkpoint_fd);
+		return;
+	}
+	char starting_password[255] = "";
+	size_t buffer_size = sizeof(char) * 255;
+	for (int i = 0; i < checkpoint_count; i++)
+	{
+		if (fread_s(&starting_password, buffer_size, buffer_size, 1, checkpoint_fd) != 1)
+		{
+			printf("[!] error reading checkpoints file %s\n", "checkpoints.dat");
+			fclose(checkpoint_fd);
+			return;
+		}
+		if (strcmp(cracking_checkpoint.starting_password, starting_password) != 0)
+		{
+			fseek(checkpoint_fd, 255 * sizeof(char), SEEK_CUR);
+			continue;
+		}
+		if (fread_s(cracking_checkpoint.current_password, buffer_size, buffer_size, 1, checkpoint_fd) != 1)
+		{
+			printf("[!] error reading checkpoints file %s\n", "checkpoints.dat");
+			fclose(checkpoint_fd);
+			return;
+		}
+	}
+}
+
 void exitHandler()
 {
+	save_checkpoint();
+	remove("temp_checkpoints.dat");
 	exit(EXIT_SUCCESS);
 }
 
@@ -363,14 +588,18 @@ int main(int ac, char** av)
 
 	m0_kdbx_database_t kdbx_db = { 0 };
 
+	if (ac < 3)
+		usage(av[0]);
+
 	signal(SIGTERM, exitHandler);
 	signal(SIGINT, exitHandler);
 	signal(SIGBREAK, exitHandler);
+	atexit(exitHandler);
 
-	if (ac < 2)
-		usage(av[0]);
-	strcpy(cracking_checkpoint.starting_password, av[3], strlen(av[3]));
+	strcpy(cracking_checkpoint.starting_password, av[2]);
 	strcpy(cracking_checkpoint.current_password, cracking_checkpoint.starting_password);
+
+	load_checkpoint();
 
 	memset(&kdbx_db, 0, sizeof(kdbx_db));
 
@@ -421,6 +650,6 @@ int main(int ac, char** av)
 
 static void usage(char* prog)
 {
-	printf("[+] usage: %s <keepassx-file.kdbx> <password length> [starting password]\n", prog);
+	printf("[+] usage: %s <keepassx-file.kdbx> <starting password>\n", prog);
 	exit(EXIT_FAILURE);
 }
