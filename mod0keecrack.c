@@ -111,11 +111,11 @@ size_t kdbx_headerentries_read(FILE* kdbx_fd, m0_kdbx_header_entry_t* entries)
 			printf("[!] fread(entries[%d].data) failed.", id);
 
 		if ((id == 3) || (id == 10)) {
-			memcpy(&entries[id].dw, entries[id].data, 4);
-			memcpy(&entries[id].qw, entries[id].data, 4);
+			memcpy(&entries[id].dw, entries[id].data, entries[id].len);
+			memcpy(&entries[id].qw, entries[id].data, entries[id].len);
 		}
 		else if (id == 6) {
-			memcpy(&entries[id].qw, entries[id].data, 8);
+			memcpy(&entries[id].qw, entries[id].data, entries[id].len);
 		}
 		result++;
 
@@ -203,7 +203,7 @@ void kdbx_payload_dump(m0_kdbx_payload_t p)
 {
 	printf("[*] kdbx payload:\n");
 	printf("[-]    payload offset:      %llx\n", p.offset_start);
-	printf("[-]    payload len:         %x\n", p.len);
+	printf("[-]    payload len:         %zx\n", p.len);
 
 	return;
 }
@@ -258,7 +258,7 @@ bool kdbx_payload_crack(m0_kdbx_database_t* db)
 		key_data = (uint8_t*)malloc(key_len);
 
 		if (!key_data) {
-			printf("[!] key_data = malloc(%d) failed.", key_len);
+			printf("[!] key_data = malloc(%zu) failed.", key_len);
 			fclose(keyfd);
 			free(key_hash);
 			return false;
@@ -333,7 +333,7 @@ bool kdbx_decrypt_payload(m0_kdbx_database_t* db, char* pass, uint8_t* key_hash)
 
 	if (masterkey_input == NULL)
 	{
-		printf("[!] masterkey_input = malloc(%d) failed.", masterkey_input_len);
+		printf("[!] masterkey_input = malloc(%zu) failed.", masterkey_input_len);
 		exit(EXIT_FAILURE);
 	}
 
@@ -344,7 +344,7 @@ bool kdbx_decrypt_payload(m0_kdbx_database_t* db, char* pass, uint8_t* key_hash)
 		return 0;
 	}
 	memcpy(masterkey_input, hdr[MASTERSEED].data, hdr[MASTERSEED].len);
-	memcpy(masterkey_input + hdr[MASTERSEED].len, transform_key, sizeof(transform_key));
+	memcpy(masterkey_input + hdr[MASTERSEED].len, transform_key, masterkey_input_len);
 
 	sha256_hash(master_key, masterkey_input, masterkey_input_len);
 
@@ -455,7 +455,7 @@ void load_checkpoint()
 	char* checkpoint_kdbx_filename = (char*)malloc(filename_size);
 	if (checkpoint_kdbx_filename == NULL)
 	{
-		printf("[!] checkpoint_kdbx_filename = malloc(%d) failed.", filename_size);
+		printf("[!] checkpoint_kdbx_filename = malloc(%zu) failed.", filename_size);
 		exit(EXIT_FAILURE);
 	}
 	if (fread_s(&checkpoint_kdbx_filename, filename_size, filename_size, 1, checkpoint_fd) != 1)
@@ -516,7 +516,7 @@ int main(int ac, char** av)
 	kdbx_filename = (char*)malloc(filename_len + 5);
 	if (kdbx_filename == NULL)
 	{
-		printf("[!] kdbx_filename = malloc(%d) failed.", filename_len + 5);
+		printf("[!] kdbx_filename = malloc(%zu) failed.", filename_len + 5);
 		exit(EXIT_FAILURE);
 	}
 	memset(kdbx_filename, 0, filename_len + 5);
