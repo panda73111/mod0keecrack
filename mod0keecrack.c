@@ -358,7 +358,7 @@ bool kdbx_decrypt_payload(m0_kdbx_database_t* db, char* pass, uint8_t* key_hash)
 void save_checkpoint()
 {
 	FILE* checkpoint_fd, * temp_fd;
-	if (fopen_s(&temp_fd, "temp_checkpoints.dat", "w") != NULL)
+	if (fopen_s(&temp_fd, "temp_checkpoints.dat", "r +") != NULL)
 	{
 		printf("[!] Can't open temporary checkpoints file %s\n", "temp_checkpoints.dat");
 		exit(EXIT_FAILURE);
@@ -450,21 +450,6 @@ void load_checkpoint()
 		printf("[!] Can't open checkpoints file %s\n", "checkpoints.dat");
 		return;
 	}
-
-	size_t filename_size = strlen(kdbx_filename);
-	char* checkpoint_kdbx_filename = (char*)malloc(filename_size);
-	if (checkpoint_kdbx_filename == NULL)
-	{
-		printf("[!] checkpoint_kdbx_filename = malloc(%zu) failed.", filename_size);
-		exit(EXIT_FAILURE);
-	}
-	if (fread_s(&checkpoint_kdbx_filename, filename_size, filename_size, 1, checkpoint_fd) != 1)
-	{
-		fclose(checkpoint_fd);
-		return;
-	}
-	if (strcmp(kdbx_filename, checkpoint_kdbx_filename) != 0)
-		return;
 
 	char starting_password[255] = { '\0' };
 	while (fread_s(&starting_password, 255, 1, 255, checkpoint_fd) == 255)
