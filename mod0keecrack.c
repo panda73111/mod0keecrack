@@ -330,6 +330,11 @@ bool kdbx_decrypt_payload(m0_kdbx_database_t* db, char* pass, uint8_t* key_hash)
 
 	masterkey_input_len = sizeof(transform_key) + hdr[MASTERSEED].len;
 	masterkey_input = (uint8_t*)malloc(masterkey_input_len);
+	if (masterkey_input == NULL)
+	{
+		printf("[!] masterkey_input = malloc(%zu) failed.", masterkey_input_len);
+		exit(EXIT_FAILURE);
+	}
 
 	if (masterkey_input == NULL)
 	{
