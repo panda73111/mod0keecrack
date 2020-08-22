@@ -306,6 +306,11 @@ bool kdbx_decrypt_payload(m0_kdbx_database_t* db, char* pass, uint8_t* key_hash)
 
 	masterkey_input_len = sizeof(transform_key) + hdr[MASTERSEED].len;
 	masterkey_input = (uint8_t*)malloc(masterkey_input_len);
+	if (masterkey_input == NULL)
+	{
+		printf("[!] masterkey_input = malloc(%d) failed.", masterkey_input_len);
+		exit(EXIT_FAILURE);
+	}
 
 	if (masterkey_input_len < hdr[MASTERSEED].len) {
 		// should never happen, as masterkey len is (currently) 16 bit
@@ -351,6 +356,11 @@ int main(int ac, char** av)
 	kdbx_path = av[1];
 	filename_len = strlen(kdbx_path);
 	kdbx_filename = (char*)malloc(filename_len + 5);
+	if (kdbx_filename == NULL)
+	{
+		printf("[!] kdbx_filename = malloc(%d) failed.", filename_len + 5);
+		exit(EXIT_FAILURE);
+	}
 	memset(kdbx_filename, 0, filename_len + 5);
 
 	if (filename_len > filename_len + 5)
