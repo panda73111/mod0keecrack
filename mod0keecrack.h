@@ -42,72 +42,77 @@ typedef uintmax_t off_t;
 
 
 enum _m0_kdbx_headerid {
-  END,
-  COMMENT,
-  CIPHERID,
-  COMPRESSIONFLAGS,
-  MASTERSEED,
-  TRANSFORMSEED,        // 5
-  TRANSFORMROUNDS,
-  ENCRYPTIONIV,
-  PROTECTEDSTREAMKEY,
-  STREAMSTARTBYTES,
-  INNERRANDOMSTREAMID,  // 10
-  HEADERIDCOUNT
+	END,
+	COMMENT,
+	CIPHERID,
+	COMPRESSIONFLAGS,
+	MASTERSEED,
+	TRANSFORMSEED,        // 5
+	TRANSFORMROUNDS,
+	ENCRYPTIONIV,
+	PROTECTEDSTREAMKEY,
+	STREAMSTARTBYTES,
+	INNERRANDOMSTREAMID,  // 10
+	HEADERIDCOUNT
 };
 
 typedef enum _m0_kdbx_headerid m0_kdbx_headerid_t;
 
 typedef struct _m0_kdbx_header_entry {
-  uint8_t   id;
-  uint16_t  len;
-  uint8_t   *data;
-  uint32_t  dw;
-  uint64_t  qw;
+	uint8_t   id;
+	uint16_t  len;
+	uint8_t* data;
+	uint32_t  dw;
+	uint64_t  qw;
 } m0_kdbx_header_entry_t;
 
 
 typedef struct _m0_kdbx_header {
-  uint32_t magic;
-  uint32_t identifier;
-  uint16_t minor_version;
-  uint16_t major_version;
+	uint32_t magic;
+	uint32_t identifier;
+	uint16_t minor_version;
+	uint16_t major_version;
 } m0_kdbx_header_t;
 
 typedef struct _m0_kdbx_payload {
-  off_t offset_start;
-  off_t pos;
-  size_t len;
-  uint8_t *encrypted;
-  uint8_t *decrypted;
+	off_t offset_start;
+	off_t pos;
+	size_t len;
+	uint8_t* encrypted;
+	uint8_t* decrypted;
 
 } m0_kdbx_payload_t;
 
 typedef struct _m0kdbx_data {
-    m0_kdbx_header_t  header;
-    size_t    data_len;
-    uint8_t   *data;
+	m0_kdbx_header_t  header;
+	size_t    data_len;
+	uint8_t* data;
 } m0_kbdx_data_t;
 
 typedef struct _m0_kdbx_database {
-  m0_kdbx_header_t        fileheader;
-  m0_kdbx_header_entry_t  kdbxheader;
-  m0_kdbx_payload_t       payload;
+	m0_kdbx_header_t        fileheader;
+	m0_kdbx_header_entry_t  kdbxheader;
+	m0_kdbx_payload_t       payload;
 } m0_kdbx_database_t;
+
+typedef struct checkpoint {
+	char starting_password[255];
+	char current_password[255];
+} checkpoint_t;
 
 // Function prototypes
 
-size_t  kdbx_headerentries_free(m0_kdbx_header_entry_t *);
-size_t  kdbx_headerentries_read(FILE *, m0_kdbx_header_entry_t *);
-void    kdbx_headerentries_dump(m0_kdbx_header_entry_t *);
+size_t  kdbx_headerentries_free(m0_kdbx_header_entry_t*);
+size_t  kdbx_headerentries_read(FILE*, m0_kdbx_header_entry_t*);
+void    kdbx_headerentries_dump(m0_kdbx_header_entry_t*);
 
-size_t  kdbx_header_read(FILE *, m0_kdbx_header_t *);
+size_t  kdbx_header_read(FILE*, m0_kdbx_header_t*);
 void    kdbx_header_dump(m0_kdbx_header_t);
 
-size_t  kdbx_payload_read(FILE *, m0_kdbx_payload_t *);
+size_t  kdbx_payload_read(FILE*, m0_kdbx_payload_t*);
 void    kdbx_payload_dump(m0_kdbx_payload_t);
-bool    kdbx_payload_crack(m0_kdbx_database_t *, FILE *);
+bool    kdbx_payload_crack(m0_kdbx_database_t*, FILE*);
 
-bool    kdbx_decrypt_payload(m0_kdbx_database_t *, char *, uint8_t *);
+bool    kdbx_decrypt_payload(m0_kdbx_database_t*, char*, uint8_t*);
 
 #endif
