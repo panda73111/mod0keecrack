@@ -281,7 +281,7 @@ bool kdbx_payload_crack(m0_kdbx_database_t* db)
 		if (res) {
 			printf("[*] decryption successful with password %s\n", cracking_checkpoint.current_password);
 			passwordfd = fopen("password.txt", "w+");
-			fwrite(cracking_checkpoint.current_password, sizeof(char), strlen(cracking_checkpoint.current_password), passwordfd);
+			fwrite(cracking_checkpoint.current_password, 1, strlen(cracking_checkpoint.current_password), passwordfd);
 			fclose(passwordfd);
 			return true;
 		}
@@ -354,8 +354,157 @@ bool kdbx_decrypt_payload(m0_kdbx_database_t* db, char* pass, uint8_t* key_hash)
 	return res;
 }
 
+void save_checkpoint()
+{
+	FILE* checkpoints_fd;
+	FILE* temp_checkpoints_fd;
+	fopen_s(&checkpoints_fd, "checkpoints.dat", "r");
+	if (!checkpoints_fd)
+	{
+		// create new checkpoints file
+		fopen_s(&checkpoints_fd, "checkpoints.dat", "w");
+		if (!checkpoints_fd)
+		{
+			printf("[!] error opening checkpoints file checkpoints.dat.\n");
+			return;
+		}
+		if (fwrite(cracking_checkpoint.starting_password, 1, 255, checkpoints_fd) != 255)
+		{
+			printf("[!] error writing checkpoints file checkpoints.dat.\n");
+			fclose(checkpoints_fd);
+			return;
+		}
+		if (fwrite(cracking_checkpoint.current_password, 1, 255, checkpoints_fd) != 255)
+		{
+			printf("[!] error writing checkpoints file checkpoints.dat.\n");
+			fclose(checkpoints_fd);
+			return;
+		}
+		fclose(checkpoints_fd);
+	}
+	else
+	{
+		// edit existing checkpoints file
+		fopen_s(&temp_checkpoints_fd, "temp_checkpoints.dat", "w");
+
+		if (!temp_checkpoints_fd)
+		{
+			char errormsg[20];
+			strerror_s(errormsg, 20, errno);
+			printf("[!] error opening checkpoints temporary file temp_checkpoints.dat: %s.\n", errormsg);
+			return;
+		}
+
+		char starting_password[255] = { 0 };
+		bool current_password_written = false;
+		while (fread_s(starting_password, 255, 1, 255, checkpoints_fd) == 255)
+		{
+			if (fwrite(starting_password, 1, 255, temp_checkpoints_fd) != 255)
+			{
+				printf("[!] error writing temporary checkpoints file temp_checkpoints.dat.\n");
+				fclose(temp_checkpoints_fd);
+				fclose(checkpoints_fd);
+				return;
+			}
+
+			char current_password[255];
+			if (fread_s(current_password, 255, 1, 255, checkpoints_fd) != 255)
+			{
+				printf("[!] error reading checkpoints file checkpoints.dat.\n");
+				fclose(temp_checkpoints_fd);
+				fclose(checkpoints_fd);
+				return;
+			}
+
+			if (strcmp(starting_password, cracking_checkpoint.starting_password) == 0)
+			{
+				if (fwrite(cracking_checkpoint.current_password, 1, 255, temp_checkpoints_fd) != 255)
+				{
+					printf("[!] error writing temporary checkpoints file temp_checkpoints.dat.\n");
+					fclose(temp_checkpoints_fd);
+					fclose(checkpoints_fd);
+					return;
+				}
+				else
+					current_password_written = true;
+			}
+			else
+			{
+				if (fwrite(current_password, 1, 255, temp_checkpoints_fd) != 255)
+				{
+					printf("[!] error writing temporary checkpoints file temp_checkpoints.dat.\n");
+					fclose(temp_checkpoints_fd);
+					fclose(checkpoints_fd);
+					return;
+				}
+			}
+		}
+
+		if (!current_password_written)
+		{
+			if (fwrite(cracking_checkpoint.starting_password, 1, 255, temp_checkpoints_fd) != 255)
+			{
+				printf("[!] error writing temporary checkpoints file temp_checkpoints.dat.\n");
+				fclose(temp_checkpoints_fd);
+				fclose(checkpoints_fd);
+				return;
+			}
+			if (fwrite(cracking_checkpoint.current_password, 1, 255, temp_checkpoints_fd) != 255)
+			{
+				printf("[!] error writing temporary checkpoints file temp_checkpoints.dat.\n");
+				fclose(temp_checkpoints_fd);
+				fclose(checkpoints_fd);
+				return;
+			}
+		}
+		fclose(temp_checkpoints_fd);
+		fclose(checkpoints_fd);
+
+		if (remove("checkpoints.dat"))
+		{
+			printf("[!] error removing checkpoints file checkpoints.dat.\n");
+			remove("temp_checkpoints.dat");
+			return;
+		}
+		if (rename("temp_checkpoints.dat", "checkpoints.dat"))
+		{
+			printf("[!] error renaming temporary checkpoints file to checkpoints.dat.\n");
+			remove("temp_checkpoints.dat");
+			return;
+		}
+	}
+}
+
+void load_checkpoint()
+{
+	FILE* checkpoints_fd;
+	fopen_s(&checkpoints_fd, "checkpoints.dat", "r");
+	if (!checkpoints_fd)
+		return;
+	char starting_password[255] = { 0 };
+	while (fread_s(starting_password, 255, 1, 255, checkpoints_fd) == 255)
+	{
+		if (strcmp(starting_password, cracking_checkpoint.starting_password) == 0)
+		{
+			if (fread_s(cracking_checkpoint.current_password, 255, 1, 255, checkpoints_fd) != 255)
+			{
+				printf("[!] error reading checkpoints file checkpoints.dat.\n");
+				fclose(checkpoints_fd);
+				return;
+			}
+		}
+		else
+		{
+			fseek(checkpoints_fd, 255, SEEK_CUR);
+			continue;
+		}
+	}
+	fclose(checkpoints_fd);
+}
+
 void exitHandler(int signal)
 {
+	save_checkpoint();
 	exit(EXIT_SUCCESS);
 }
 
@@ -418,6 +567,7 @@ int main(int ac, char** av)
 	kdbx_payload_read(kdbx_fd, &kdbx_db.payload);
 	kdbx_payload_dump(kdbx_db.payload);
 
+	load_checkpoint();
 	kdbx_payload_crack(&kdbx_db);
 
 	kdbx_headerentries_free(&kdbx_db.kdbxheader);
